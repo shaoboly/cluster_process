@@ -2,6 +2,7 @@
 
 import numpy as np
 import csv
+import os
 
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -10,12 +11,21 @@ import copy
 import math
 from pre_process import *
 
-_data_dir_ = "t_bsfwt_stard.csv"
+#_data_dir_ = "t_bsfwt_stard.csv"
+_data_dir_ ="t_standard66.csv"
 group_num = 5
 feature_end = 9
-filter_num = '24419'
-#weight = [0.17, 0.23, 0.28, 0.11, 0.08, 0.06 ,0.05]
+filter_num = '24401'
+
+server_num= [None ,'24401','24402','24406','24407','24412','24414','24419','24420','24451']
+
+standard_line_num = 2
+
+#namestr = "no_weigh"
+namestr = ''
+kpiweight = [0.082719141,0.061460086,0.050417881,0.127127107,0.174003716,0.230284059,0.27398801]
 weight = [0.082719141,0.061460086,0.050417881,0.127127107,0.174003716,0.230284059,0.27398801] #广州转置
+#weight = [1,1,1,1,1,1,1]
 
 inverse = [0,2,3]
 
@@ -24,11 +34,11 @@ def compute_kpi(deal_data):
 
     for item in deal_data:
         tmp = 0
-        for i in range(0,len(weight)):
+        for i in range(0,len(kpiweight)):
             if i in inverse:
-                tmp += (1-item[i]) * weight[i]
+                tmp += (1-item[i]) * kpiweight[i]
             else:
-                tmp += item[i] * weight[i]
+                tmp += item[i] * kpiweight[i]
         kpi_result.append(tmp)
 
     kpi_result = kpi_to_standard(kpi_result,chaxishu=0.2)
@@ -148,24 +158,66 @@ def max_min(data,clt):
         count += 1
     return (max_x, min_x, sum_num)
 
+
+def choose_score(all_gruop,sum_kpi):
+    kpi_average = []
+    for i in range(0,group_num):
+        kpi_average.append(np.average(sum_kpi[i]))
+    for i in range(0,group_num-1):
+        for j in range(i+1,group_num):
+            if kpi_average[i]<kpi_average[j]:
+                kpi_average[i],kpi_average[j] = kpi_average[j],kpi_average[i]
+                all_gruop[i],all_gruop[j] = all_gruop[j],all_gruop[i]
+                sum_kpi[i],sum_kpi[j] = sum_kpi[j],sum_kpi[i]
+
+    init_all_group = copy.deepcopy(all_gruop)
+    init_kpi = copy.deepcopy(sum_kpi)
+    for i in range(0,group_num-standard_line_num-1):
+        l_min2 = [0, len(sum_kpi[0]) + len(sum_kpi[1])]
+        for j in range(1,len(sum_kpi)-1):
+            now = len(sum_kpi[j])+len(sum_kpi[j+1])
+            if now <l_min2[1]:
+                l_min2[0],l_min2[1] = j,now
+        sum_kpi[l_min2[0]] = sum_kpi[l_min2[0]]+sum_kpi[l_min2[0]+1]
+        all_gruop[l_min2[0]] = all_gruop[l_min2[0]]+all_gruop[l_min2[0]]
+        del sum_kpi[l_min2[0]+1]
+        del all_gruop[l_min2[0]+1]
+
+
+    line = []
+    for i in range(0,standard_line_num):
+        min_tmp = min(sum_kpi[i])
+        max_tmp = max(sum_kpi[i+1])
+        line.append((min_tmp+max_tmp)/2)
+
+    return init_all_group,init_kpi,all_gruop,sum_kpi,line
+
+
+
 #输出
 def data_out(clt,center,fileter = filter_num):
-    init_data = init_data_get(_data_dir_)
+    init_data = init_data_get(_data_dir_,filter_num)
     all_group = [ [] for i in range(0,group_num)]
-    read_data_now = data_read(_data_dir_)
+    read_data_now = data_read(_data_dir_,filter_num)
 
     kpidata = kpi_process(read_data_now)
 
     max_x, min_x, sum_num = max_min(read_data_now,clt)
     kpi = compute_kpi(kpidata)
 
+    if not os.path.exists(str(filter_num) ):
+        os.makedirs(str(filter_num))
+
     sum_kpi = [[] for i in range(0,group_num)]
     for i in range(0,len(clt.labels_)):
         all_group[clt.labels_[i]].append(init_data[i+1]+[clt.labels_[i]]+[kpi[i]]+kpidata.tolist()[i])
         sum_kpi[clt.labels_[i]].append(kpi[i])
-    writer = csv.writer(open(str(group_num) +"result.csv", "wb"))
+
+    all_group,sum_kpi,init_group,init_kpi,line = choose_score(all_group,sum_kpi)
+
+    writer = csv.writer(open(str(filter_num)+'/'+namestr+str(group_num) +"result.csv", "wb"))
     writer.writerow(init_data[0]+['label','kpi'])
-    for i in range(0,group_num):
+    for i in range(0,len(all_group)):
         for j in range(0,len(all_group[i])):
             writer.writerow(all_group[i][j])
         writer.writerow([])
@@ -176,25 +228,45 @@ def data_out(clt,center,fileter = filter_num):
         writer.writerow(['total'] + [sum_num[i]])
         writer.writerow([])
 
+    writer1 = csv.writer(open(str(filter_num) + '/' + namestr + str(group_num) + "kpi_list.csv", "wb"))
+    for i in range(0,len(kpi)-1):
+        for j in range(i+1,len(kpi)):
+            if kpi[i] < kpi[j]:
+                kpi[i],kpi[j] = kpi[j],kpi[i]
+                init_data[i+1],init_data[j+1] = init_data[j+1],init_data[i+1]
 
-for i in range(3,6):
-    group_num = i
-    feature_end = 13
-    filter_num = '24419'
-    data = data_read(_data_dir_)
-    #pca = PCA(n_components=group_num).fit(data)
-
-    max_min_scaler = data_process()
-    data_max_min = max_min_scaler.fit_transform(data)
-    tans_data(data_max_min)
-
-    clt = cluster_1(data_max_min)
-
-    center = clt.cluster_centers_
-    tans_data_inv(center)
-    center = max_min_scaler.inverse_transform(center)
+    writer1.writerow(init_data[0]+['kpi'])
+    c_line = 0
+    for i in range(0,len(kpi)):
+        if  c_line <len(line) and kpi[i]<line[c_line]:
+            writer1.writerow(['---','---','---','---','---','---','---'])
+            c_line+=1
+        writer1.writerow(init_data[i+1]+[kpi[i]])
 
 
-    print center
 
-    data_out(clt,center)
+
+for i in range(5,8):
+    for server_name in server_num:
+        filter_num = server_name
+        group_num = i
+        feature_end = 9
+        data = data_read(_data_dir_,filter_num)
+        if len(data)<10:
+            continue
+        #pca = PCA(n_components=group_num).fit(data)
+
+        max_min_scaler = data_process()
+        data_max_min = max_min_scaler.fit_transform(data)
+        tans_data(data_max_min)
+
+        clt = cluster_1(data_max_min)
+
+        center = clt.cluster_centers_
+        tans_data_inv(center)
+        center = max_min_scaler.inverse_transform(center)
+
+
+        #print center
+
+        data_out(clt,center)
