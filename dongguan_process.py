@@ -12,19 +12,19 @@ import math
 from pre_process import *
 
 #_data_dir_ = "t_bsfwt_stard.csv"
-_data_dir_ ="t_standard66.csv"
+_data_dir_ ="dongguan_data.csv"
 group_num = 5
 feature_end = 9
 filter_num = '24401'
 
-server_num= [None ,'24401','24402','24406','24407','24412','24414','24419','24420','24451']
+server_num= ['24419']
 
 standard_line_num = 2
 
 #namestr = "no_weigh"
 namestr = ''
-kpiweight = [0.082719141,0.061460086,0.050417881,0.127127107,0.174003716,0.230284059,0.27398801]
-weight = [0.082719141,0.061460086,0.050417881,0.127127107,0.174003716,0.230284059,0.27398801] #广州转置
+kpiweight = [0.061637747,0.167242253,0.111733113,0.111733113,0.223227224,0.223227224,0.101199325]
+weight = [0.061637747,0.167242253,0.111733113,0.111733113,0.223227224,0.223227224,0.101199325] #东莞转置
 #weight = [1,1,1,1,1,1,1]
 
 inverse = [0,2,3]
@@ -58,7 +58,7 @@ def init_data_get(dir,fileter = filter_num):
         for i in range(2,feature_end):
             tmp.append(item[i])
 
-        tmp.append(item[13])
+        tmp.append(item[15])
         init_data.append(tmp)
         count += 1
     return init_data
@@ -92,9 +92,10 @@ def data_process():
     return max_min_scaler
 
 def kpi_process(data):
-    chaoshi = minus_by_one(data.T[0].T,0.01)
-    chuangkou = Zscore(data.T[1].T)
-    banli = max_min_process(data.T[2].T, 1)
+    banli = max_min_process(data.T[0].T, 1)
+    guanhu = max_min_process(data.T[1],0)
+    chaoshi = minus_by_one(data.T[2].T,0.01)
+
     #banli = Zscore(banli)
     dengdai  = max_min_process(data.T[3].T, 1)
     #dengdai = Zscore(dengdai)
@@ -102,7 +103,7 @@ def kpi_process(data):
     rir = Zscore(data.T[5].T)
     zk = Zscore(data.T[6].T)
 
-    new_data = np.c_[chaoshi,chuangkou,banli,dengdai,riy,rir,zk]
+    new_data = np.c_[banli,guanhu,chaoshi,dengdai,riy,rir,zk]
     return new_data
 
 
@@ -128,7 +129,6 @@ def tans_data_inv(now_data):
 def cluster_1(scale_data):
     clt = KMeans(init='k-means++', n_clusters=group_num, n_init=10)
     clt.fit(scale_data)
-
     return clt
 
 #max&min
@@ -185,12 +185,12 @@ def choose_score(all_gruop,sum_kpi):
 
     line = []
     for i in range(0,standard_line_num):
-        '''min_tmp = min(sum_kpi[i])
-        max_tmp = max(sum_kpi[i+1])
-        line.append((min_tmp+max_tmp)/2)'''
-        av1 = np.average(sum_kpi[i])
-        av2 = np.average(sum_kpi[i + 1])
-        line.append((av1 + av2) / 2)
+        #min_tmp = min(sum_kpi[i])
+        #max_tmp = max(sum_kpi[i+1])
+        #line.append((min_tmp+max_tmp)/2)
+        av1= np.average(sum_kpi[i])
+        av2 = np.average(sum_kpi[i+1])
+        line.append((av1+av2)/2)
 
     return init_all_group,init_kpi,all_gruop,sum_kpi,line
 
@@ -241,14 +241,14 @@ def data_out(clt,center,fileter = filter_num):
     c_line = 0
     for i in range(0,len(kpi)):
         if  c_line <len(line) and kpi[i]<line[c_line]:
-            writer1.writerow(['---','---','---','---','---','---','---'])
+            writer1.writerow(['kpi划分',line[c_line],'---','---','---','---','---','---','---'])
             c_line+=1
         writer1.writerow(init_data[i+1]+[kpi[i]])
 
 
 
 
-for i in range(5,8):
+for i in range(6,8):
     for server_name in server_num:
         filter_num = server_name
         group_num = i
